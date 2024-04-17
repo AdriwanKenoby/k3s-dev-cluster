@@ -1,0 +1,56 @@
+---
+- name: Init K3s cluster VMs
+  hosts: localhost
+  connection: local
+  vars_files:
+    - k3s-env.yaml
+
+  tasks:
+    - name: Create k3s VMs cluster nodes
+      theko2fi.multipass.multipass_vm:
+        name: "{{ item.name }}"
+        cpus: "{{ item.cpus }}"
+        memory: "{{ item.memory }}"
+        disk: "{{ item.disk }}"
+        state: "{{ item.state }}"
+      register: k3s_cluster_info
+      loop: "{{ k3s_cluster }}"
+    
+    - ansible.builtin.debug:
+        var: k3s_cluster_info.results | map(attribute='item') | map(attribute='name')
+
+    - name: Add k3s cluster to in memory inventory
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: "{{ belong | reject('equalto', omit) | list }}"
+        ansible_host: "{{ item }}"
+        ansible_connection: theko2fi.multipass.multipass
+        ansible_python_interpreter: '/usr/bin/python3'
+      vars:
+        belong:
+          - "{{ 'etcd' if 'etcd' in item else omit }}"
+          - "{{ 'control' if 'control-plane' in item else omit }}"
+          - "{{ 'agent' if 'agent' in item else omit }}"
+      loop: "{{ k3s_cluster_info.results | map(attribute='item') | map(attribute='name') }}"
+
+    - name: Build static inventory
+      ansible.builtin.template:
+        src: inventory.ini.j2
+        dest: inventory.ini
+        mode: "0640"
+      delegate_to: localhost
+      run_once: true
+
+- name: Run a play against the multipass VMs
+  hosts: all
+  become: true
+  vars_files:
+    - k3s-env.yaml
+  
+  tasks:
+    - name: Set authorized key for user ubuntu copying it from current user
+      ansible.posix.authorized_key:
+        user: ubuntu
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_ed25519.pub') }}"
+

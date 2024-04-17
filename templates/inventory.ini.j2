@@ -1,0 +1,6 @@
+{% for group in groups %}
+[{{ group }}]
+{% for host in groups[group] %}
+{{ host }} ansible_host={{ k3s_cluster_info.results | map(attribute='result') | map(attribute='info') | selectattr(host|quote, 'defined') | map(attribute=host|quote) | map(attribute='ipv4') | first | first }}
+{% endfor %}
+{% endfor %}

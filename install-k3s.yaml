@@ -1,0 +1,70 @@
+---
+- name: Run a play against the multipass VMs
+  hosts: all
+  become: true
+  vars_files:
+    - k3s-env.yaml
+
+  tasks:
+    - name: Download k3s install script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: ./k3s.sh
+        mode: "0770"
+
+    - name: Install k3s etcd
+      ansible.builtin.command: "./k3s.sh - server --cluster-init --disable-apiserver --disable-controller-manager --disable-scheduler"
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version }}"
+      register: k3s_install_etcd_result
+      changed_when: true
+      failed_when: k3s_install_etcd_result.rc != 0
+      when: inventory_hostname in groups['etcd']
+
+    - name: Extract secret token
+      ansible.builtin.command: cat /var/lib/rancher/k3s/server/node-token
+      register: token_cmd_result
+      changed_when: false
+      failed_when: token_cmd_result.rc != 0
+      when: inventory_hostname == groups['etcd'][0]
+      no_log: true
+
+    - name: Install k3s control-plane
+      ansible.builtin.command: >
+        ./k3s.sh - server --disable-etcd
+        --token {{ hostvars[groups['etcd'][0]]['token_cmd_result']['stdout'] | quote }}
+        --server https://{{ hostvars[groups['etcd'][0]]['ansible_default_ipv4']['address'] | quote }}:6443
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version | quote }}"
+      register: k3s_install_control_result
+      changed_when: true
+      failed_when: k3s_install_control_result.rc != 0
+      when: inventory_hostname in groups['control']
+
+    - name: Install k3s agent
+      ansible.builtin.command: "./k3s.sh - agent"
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version | quote }}"
+        K3S_URL: "https://{{ hostvars[groups['control'][0]]['ansible_default_ipv4']['address'] }}:6443"
+        K3S_TOKEN: "{{ hostvars[groups['etcd'][0]]['token_cmd_result']['stdout'] }}"
+      register: k3s_install_agent_result
+      changed_when: true
+      failed_when: k3s_install_agent_result.rc != 0
+      when: inventory_hostname in groups['agent']
+
+    - name: Fetch kube config file
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: ~/.kube/k3s.cfg
+        flat: true
+      when: inventory_hostname == groups['control'][0]
+
+    - name: Replace with ip from control-plane
+      become: false
+      ansible.builtin.lineinfile:
+        path: ~/.kube/k3s.cfg
+        regexp: '^(\s+)server: https://127.0.0.1:6443$'
+        line: "\\1server: https://{{ hostvars[groups['control'][0]]['ansible_default_ipv4']['address'] }}:6443"
+        backrefs: true
+      delegate_to: localhost
+      run_once: true

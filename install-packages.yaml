@@ -1,0 +1,13 @@
+---
+- name: Init K3s cluster VMs
+  hosts: localhost
+  connection: local
+  vars_files:
+    - k3s-env.yaml
+  tasks:
+    - name: Install kubectl with option --classic
+      community.general.snap:
+        name: "{{ item.name }}"
+        classic: "{{ item.classic | ternary(true, omit) }}"
+      loop: "{{ host_snap_packages }}"
+       

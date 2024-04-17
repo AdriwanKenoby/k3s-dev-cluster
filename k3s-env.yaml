@@ -1,0 +1,31 @@
+---
+host_snap_packages:
+  - { name: multipass, classic: false }
+  - { name: kubectl, classic: true }
+
+k3s_version: v1.28.8+k3s1
+
+k3s_cluster:
+  - name: k3s-etcd-1
+    cpus: 1
+    memory: 2G
+    disk: 24G
+    state: started
+
+  - name: k3s-control-plane-1
+    cpus: 4
+    memory: 4G
+    disk: 24G
+    state: started 
+
+  - name: k3s-agent-1
+    cpus: 2
+    memory: 2G
+    disk: 24G
+    state: started
+
+  - name: k3s-agent-2
+    cpus: 2
+    memory: 2G
+    disk: 24G
+    state: started
