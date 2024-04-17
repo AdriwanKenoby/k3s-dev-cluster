@@ -2,6 +2,7 @@
 - name: Init K3s cluster VMs
   hosts: localhost
   connection: local
+  gather_facts: false
   vars_files:
     - k3s-env.yaml
 
@@ -44,6 +45,7 @@
 - name: Run a play against the multipass VMs
   hosts: all
   become: true
+  gather_facts: false
   vars_files:
     - k3s-env.yaml
   

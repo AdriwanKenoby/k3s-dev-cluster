@@ -68,3 +68,8 @@
         backrefs: true
       delegate_to: localhost
       run_once: true
+
+    - name: Remove k3s install script
+      ansible.builtin.file:
+        path: ./k3s.sh
+        state: absent
