@@ -1,0 +1,32 @@
+---
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: elasticsearch
+  namespace: elk
+spec:
+  version: 8.13.2
+  volumeClaimDeletePolicy: DeleteOnScaledownOnly
+  nodeSets:
+  - name: elasticsearch
+    count: 1
+    config:
+      node.store.allow_mmap: false
+    podTemplate:
+      spec:
+        initContainers:
+        - name: sysctl
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+    volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-data # Do not change this name unless you set up a volume mount for the data path.
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: longhorn

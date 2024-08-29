@@ -2,8 +2,6 @@
 - name: Run a play against the multipass VMs
   hosts: all
   become: true
-  vars_files:
-    - k3s-env.yaml
 
   tasks:
     - name: Download k3s install script
@@ -64,10 +62,10 @@
       ansible.builtin.lineinfile:
         path: ~/.kube/k3s.cfg
         regexp: '^(\s+)server: https://127.0.0.1:6443$'
-        line: "\\1server: https://{{ hostvars[groups['control'][0]]['ansible_default_ipv4']['address'] }}:6443"
+        line: "\\1server: https://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:6443"
         backrefs: true
       delegate_to: localhost
-      run_once: true
+      when: inventory_hostname == groups['control'][0]
 
     - name: Remove k3s install script
       ansible.builtin.file:

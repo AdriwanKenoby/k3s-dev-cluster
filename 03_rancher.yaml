@@ -1,0 +1,64 @@
+---
+- name: Install Helm repositories
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/vault.yaml
+
+  tasks:
+    - name: Add helm repositories
+      kubernetes.core.helm_repository:
+        name: "{{ item.name }}"
+        repo_url: "{{ item.url }}"
+      loop:
+        - { name: rancher-stable, url: https://releases.rancher.com/server-charts/stable }
+        - { name: jetstack, url: https://charts.jetstack.io }
+
+    - name: Separately update the repository cache
+      kubernetes.core.helm:
+        name: dummy
+        namespace: kube-system
+        state: absent
+        update_repo_cache: true
+
+    - name: Create a k8s namespace
+      kubernetes.core.k8s:
+        name: cattle-system
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    # Download and apply manifest
+    - name: Download crd for cert-manager
+      ansible.builtin.get_url:
+        url: "https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.crds.yaml"
+        dest: ./cert-manager.yaml
+        mode: '0664'
+
+    - name: Apply cert-manager manifest to the cluster.
+      kubernetes.core.k8s:
+        state: present
+        src: cert-manager.yaml
+
+    - name: delete cert-manager crd file
+      file:
+        path: cert-manager.yaml
+        state: absent 
+
+    - name: Deploy cert-manager
+      kubernetes.core.helm:
+        name: cert-manager
+        chart_ref: jetstack/cert-manager
+        release_namespace: cert-manager
+        create_namespace: true
+
+    - name: Deploy stable rancher
+      kubernetes.core.helm:
+        name: rancher
+        chart_ref: rancher-stable/rancher
+        release_namespace: cattle-system
+        values:
+          replicas: 1
+          hostname: "{{ rancher_ssl_name }}"
+          bootstrapPassword: "{{ rancher_pwd }}"

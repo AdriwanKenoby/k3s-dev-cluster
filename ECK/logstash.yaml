@@ -1,0 +1,81 @@
+---
+apiVersion: logstash.k8s.elastic.co/v1alpha1
+kind: Logstash
+metadata:
+  name: logstash
+  namespace: elk
+spec:
+  count: 1
+  elasticsearchRefs:
+    - name: elasticsearch
+      clusterName: elk
+      namespace: elk
+  podTemplate:
+    spec:
+      containers:
+      - name: logstash
+        env:
+        - name: LS_JAVA_OPTS
+          value: "-Xmx2g -Xms2g"
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: 0.5
+          limits:
+            memory: 2Gi
+            cpu: 2
+  services:
+    - name: beats
+      service:
+        spec:
+          type: NodePort
+          ports:
+            - port: 8080
+              targetPort: 8080
+              nodePort: 31500
+              name: "beat"
+              protocol: TCP    
+  version: 8.13.2
+  pipelines:
+    - pipeline.id: main
+      config.string: |
+        input {
+          http {}
+        }
+        
+        filter {
+          grok {
+            match => ['message', '%{COMBINEDAPACHELOG}+%{GREEDYDATA:extra_fields}']
+            overwrite => ['message']
+          }
+          mutate {
+            convert => ['response', 'integer']
+            convert => ['bytes', 'integer']
+            convert => ['responsetime', 'float']
+          }
+          geoip {
+            source => 'clientip'
+            target => 'geoip'
+            add_tag => ['nginx-geoip']
+          }
+          date {
+            match => ['timestamp', 'dd/MMM/YYYY:HH:mm:ss Z']
+            remove_field => ['timestamp']
+          }
+          useragent {
+            source => 'agent'
+          }
+        }
+        
+        output {
+          elasticsearch {
+            hosts => [ "${ELK_ES_HOSTS}" ]
+            user => "${ELK_ES_USER}"
+            password => "${ELK_ES_PASSWORD}"
+            ssl_certificate_authorities => "${ELK_ES_SSL_CERTIFICATE_AUTHORITY}"
+          }
+          stdout {
+            codec => rubydebug
+          }
+        }
+  

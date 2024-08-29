@@ -1,0 +1,5 @@
+---
+k3s_version: v1.28.8+k3s1
+cert_manager_version: v1.14.4
+longhorn_version: "1.6.1"
+elastic_crds: "2.12.1"
